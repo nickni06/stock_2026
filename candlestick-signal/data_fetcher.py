@@ -114,78 +114,62 @@ def _search_from_cache(keyword: str) -> List[Dict]:
     return results
 
 
+_network_available = None
+
+
+def _check_network() -> bool:
+    """检测网络是否可用（缓存结果，避免每次都检测）"""
+    global _network_available
+    if _network_available is not None:
+        return _network_available
+    try:
+        import socket
+        socket.setdefaulttimeout(2)
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect(("www.baidu.com", 80))
+        _network_available = True
+    except Exception:
+        _network_available = False
+    return _network_available
+
+
 def search_symbols(keyword: str) -> List[Dict]:
     """
     模糊搜索标的（股票、ETF、板块）
     支持：代码、名称、拼音首字母
-    优先使用网络搜索，网络不可用时回退到本地缓存
+    网络不可用时使用本地缓存
     """
-    result = []
+    cache_result = _search_from_cache(keyword)
+
+    if not _check_network():
+        return cache_result[:20]
 
     try:
-        # A股搜索
-        stock_info = ak.stock_info_a_code_name()
         keyword_lower = keyword.lower()
+        stock_info = ak.stock_info_a_code_name()
 
+        result = []
         for _, row in stock_info.iterrows():
             code = str(row['code'])
             name = str(row['name'])
             if (keyword_lower in code.lower() or
                 keyword_lower in name.lower() or
-                (is_pinyin_match(name, keyword_lower))):
-                try:
-                    # 获取最新价格
-                    recent_df = get_recent_kline(code, 'stock', 5)
-                    if recent_df is not None and len(recent_df) > 0:
-                        last_close = recent_df['close'].iloc[-1]
-                        prev_close = recent_df['close'].iloc[-2] if len(recent_df) > 1 else last_close
-                        change = (last_close - prev_close) / prev_close * 100
-                        result.append({
-                            'code': code,
-                            'name': name,
-                            'type': 'stock',
-                            'last_price': round(last_close, 2),
-                            'change_pct': round(change, 2)
-                        })
-                except:
-                    result.append({
-                        'code': code,
-                        'name': name,
-                        'type': 'stock',
-                        'last_price': 0,
-                        'change_pct': 0
-                    })
+                is_pinyin_match(name, keyword_lower)):
+                result.append({
+                    'code': code,
+                    'name': name,
+                    'type': 'stock',
+                    'last_price': 0,
+                    'change_pct': 0
+                })
                 if len(result) >= 20:
                     break
 
-        # ETF搜索
-        if len(result) < 20:
-            try:
-                etf_list = ak.fund_etf_sina_info()
-                for _, row in etf_list.iterrows():
-                    code = str(row['code'])
-                    name = str(row['name'])
-                    if (keyword_lower in code.lower() or
-                        keyword_lower in name.lower() or
-                        is_pinyin_match(name, keyword_lower)):
-                        result.append({
-                            'code': code,
-                            'name': name,
-                            'type': 'etf',
-                            'last_price': 0,
-                            'change_pct': 0
-                        })
-                        if len(result) >= 20:
-                            break
-            except:
-                pass
-
+        if len(result) > 0:
+            return result[:20]
     except Exception as e:
-        print(f"Network search failed, falling back to local cache: {e}")
-        # 网络不可用，从本地缓存搜索
-        result = _search_from_cache(keyword)
+        print(f"Network search failed, using local cache: {e}")
 
-    return result[:20]
+    return cache_result[:20]
 
 
 def is_pinyin_match(name: str, keyword: str) -> bool:
