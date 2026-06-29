@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>蜡烛图信号系统</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-layout">
+
+    <!-- 侧边栏导航（桌面端） -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">蜡烛图信号</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item active" data-page="optimize">
+          <span class="icon">&#9851;</span> 最优信号挖掘
+        </li>
+        <li class="nav-item" data-page="backtest">
+          <span class="icon">&#9881;</span> 信号回测
+        </li>
+        <li class="nav-item" data-page="patterns">
+          <span class="icon">&#9776;</span> 信号库
+        </li>
+        <li class="nav-item" data-page="watchlist">
+          <span class="icon">&#9733;</span> 关注列表
+        </li>
+        <li class="nav-item" data-page="scan">
+          <span class="icon">&#128269;</span> 全量扫描
+        </li>
+        <li class="nav-item" data-page="alerts">
+          <span class="icon">&#128276;</span> 信号提醒
+        </li>
+      </ul>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+
+      <!-- ==================== 最优信号挖掘页 ==================== -->
+      <section class="page active" id="optimize">
+        <div class="page-header">
+          <h2>最优信号挖掘</h2>
+          <p class="subtitle">输入标的，系统自动识别当前市场阶段，回测全部信号，输出最优买点和卖点</p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">挖掘参数</div>
+          <form id="optimize-form">
+            <div class="form-row">
+              <div class="form-group" style="flex:2">
+                <label>标的代码/名称</label>
+                <div class="search-wrapper">
+                  <input type="text" id="optimize-symbol" placeholder="输入代码或名称，如 600519 / 贵州茅台 / gzmt" autocomplete="off">
+                  <div class="search-results" id="optimize-search-results"></div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>起始日期</label>
+                <input type="date" id="optimize-start">
+              </div>
+              <div class="form-group">
+                <label>结束日期</label>
+                <input type="date" id="optimize-end">
+              </div>
+              <div class="form-group" style="max-width:100px">
+                <label>Top N</label>
+                <select id="optimize-topn">
+                  <option value="3">3</option>
+                  <option value="5" selected>5</option>
+                  <option value="8">8</option>
+                </select>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary">挖掘最优信号</button>
+          </form>
+        </div>
+
+        <!-- 市场阶段信息 -->
+        <div class="phase-info" id="optimize-phase" style="display:none">
+          <div class="phase-item">
+            <div class="lbl">当前阶段</div>
+            <div class="val" id="phase-label">-</div>
+          </div>
+          <div class="phase-item">
+            <div class="lbl">MA20</div>
+            <div class="val" id="phase-ma20">-</div>
+          </div>
+          <div class="phase-item">
+            <div class="lbl">MA60</div>
+            <div class="val" id="phase-ma60">-</div>
+          </div>
+          <div class="phase-item">
+            <div class="lbl">ATR%</div>
+            <div class="val" id="phase-atrpct">-</div>
+          </div>
+        </div>
+
+        <!-- 加载指示器 -->
+        <div id="optimize-loading" class="loading">
+          <div class="spinner"></div>
+          <div>正在分析中，请稍候...</div>
+        </div>
+
+        <!-- 挖掘结果 -->
+        <div id="optimize-result" style="display:none">
+          <div class="card" style="background:rgba(88,166,255,0.05);margin-bottom:1rem;display:none" id="optimize-note"></div>
+
+          <div class="card">
+            <div class="card-title">最优买点信号</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>信号名称</th><th>样本数</th><th>胜率</th><th>平均收益</th><th>盈亏比</th><th>最大回撤</th><th>评分</th></tr>
+                </thead>
+                <tbody id="optimize-buy-table"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">最优卖点信号</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>信号名称</th><th>样本数</th><th>胜率</th><th>平均收益</th><th>盈亏比</th><th>最大回撤</th><th>评分</th></tr>
+                </thead>
+                <tbody id="optimize-sell-table"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">K线图</div>
+            <div class="chart-container" id="kline-chart-container">
+              <canvas></canvas>
+              <div class="chart-tooltip"></div>
+            </div>
+            <div class="chart-legend">
+              <span><span class="legend-marker" style="background:#ef4444"></span> 阳线</span>
+              <span><span class="legend-marker" style="background:#22c55e"></span> 阴线</span>
+              <span>&#9650; 买入信号</span>
+              <span>&#9660; 卖出信号</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 信号回测页 ==================== -->
+      <section class="page" id="backtest">
+        <div class="page-header">
+          <h2>信号回测</h2>
+          <p class="subtitle">选择标的和信号，回测历史表现，查看策略收益曲线</p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">回测参数</div>
+          <form id="backtest-form">
+            <div class="form-row">
+              <div class="form-group" style="flex:2">
+                <label>标的代码/名称</label>
+                <div class="search-wrapper">
+                  <input type="text" id="backtest-symbol" placeholder="输入代码或名称" autocomplete="off">
+                  <div class="search-results" id="backtest-search-results"></div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>起始日期</label>
+                <input type="date" id="backtest-start">
+              </div>
+              <div class="form-group">
+                <label>结束日期</label>
+                <input type="date" id="backtest-end">
+              </div>
+              <div class="form-group" style="max-width:100px">
+                <label>持有天数</label>
+                <select id="backtest-hold">
+                  <option value="3">3天</option>
+                  <option value="5" selected>5天</option>
+                  <option value="10">10天</option>
+                  <option value="20">20天</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>选择信号（不选则回测全部）</label>
+              <div class="chip-group" id="pattern-chips"></div>
+            </div>
+            <button type="submit" class="btn btn-primary">开始回测</button>
+          </form>
+        </div>
+
+        <div id="backtest-loading" class="loading">
+          <div class="spinner"></div>
+          <div>正在回测中，请稍候...</div>
+        </div>
+
+        <div id="backtest-result" style="display:none">
+          <!-- 统计卡片 -->
+          <div class="stat-grid">
+            <div class="stat-card">
+              <div class="num" id="bt-total-trades">0</div>
+              <div class="label">交易次数</div>
+            </div>
+            <div class="stat-card">
+              <div class="num" id="bt-win-rate">0%</div>
+              <div class="label">胜率</div>
+            </div>
+            <div class="stat-card">
+              <div class="num" id="bt-avg-return">0%</div>
+              <div class="label">平均收益</div>
+            </div>
+            <div class="stat-card">
+              <div class="num" id="bt-profit-factor">0</div>
+              <div class="label">盈亏比</div>
+            </div>
+            <div class="stat-card">
+              <div class="num red" id="bt-max-dd">0%</div>
+              <div class="label">最大回撤</div>
+            </div>
+            <div class="stat-card">
+              <div class="num" id="bt-total-return">0%</div>
+              <div class="label">总收益</div>
+            </div>
+          </div>
+
+          <!-- K线图 -->
+          <div class="card">
+            <div class="card-title">K线图与信号标注</div>
+            <div class="chart-container" id="backtest-kline-chart-container">
+              <canvas></canvas>
+              <div class="chart-tooltip"></div>
+            </div>
+            <div class="chart-legend">
+              <span>&#9650; 买入信号</span>
+              <span>&#9660; 卖出信号</span>
+            </div>
+          </div>
+
+          <!-- 收益曲线 -->
+          <div class="card">
+            <div class="card-title">策略 vs 基准收益曲线</div>
+            <div class="equity-chart-container" id="equity-chart-container">
+              <canvas></canvas>
+            </div>
+          </div>
+
+          <!-- 交易明细 -->
+          <div class="card">
+            <div class="card-title">交易明细</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>信号名称</th><th>信号日期</th><th>买入价</th><th>3日收益</th><th>5日收益</th><th>10日收益</th><th>盈亏</th></tr>
+                </thead>
+                <tbody id="backtest-trades-table"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 信号库页 ==================== -->
+      <section class="page" id="patterns">
+        <div class="page-header">
+          <h2>信号库</h2>
+          <p class="subtitle">30+ 种经典蜡烛图形态定义与识别规则</p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">分类筛选</div>
+          <div class="chip-group">
+            <div class="chip selected filter-tab" data-type="all">全部</div>
+            <div class="chip filter-tab" data-type="bullish">买入信号</div>
+            <div class="chip filter-tab" data-type="bearish">卖出信号</div>
+            <div class="chip filter-tab" data-type="reversal">反转信号</div>
+            <div class="chip filter-tab" data-type="continuation">突破信号</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>信号名称</th><th>分类</th><th>形态说明</th><th>识别规则</th></tr>
+              </thead>
+              <tbody id="patterns-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="stat-grid" style="margin-top:1rem">
+          <div class="stat-card">
+            <div class="num">30+</div>
+            <div class="label">内置蜡烛图信号</div>
+          </div>
+          <div class="stat-card">
+            <div class="num">4</div>
+            <div class="label">信号分类维度</div>
+          </div>
+          <div class="stat-card">
+            <div class="num">1~3</div>
+            <div class="label">单信号涉及K线数</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 关注列表页 ==================== -->
+      <section class="page" id="watchlist">
+        <div class="page-header">
+          <h2>关注列表</h2>
+          <p class="subtitle">管理关注的标的，查看最近出现的信号</p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">添加标的</div>
+          <div class="form-row">
+            <div class="form-group" style="flex:2">
+              <div class="search-wrapper">
+                <input type="text" id="watchlist-search" placeholder="搜索标的代码或名称" autocomplete="off">
+                <div class="search-results" id="watchlist-search-results"></div>
+              </div>
+            </div>
+            <div>
+              <button class="btn btn-primary" id="add-to-watchlist-btn">添加到关注列表</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="watchlist-container"></div>
+      </section>
+
+      <!-- ==================== 全量扫描页 ==================== -->
+      <section class="page" id="scan">
+        <div class="page-header">
+          <h2>全量扫描</h2>
+          <p class="subtitle">一键扫描关注列表中所有标的，筛选当前出现信号的标的</p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">扫描参数</div>
+          <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
+            <div>
+              <label style="color:#8b949e;font-size:0.85rem;margin-right:0.5rem">信号类型:</label>
+              <label style="margin-right:0.8rem;cursor:pointer">
+                <input type="radio" name="scan-type-filter" value="all" checked> 全部
+              </label>
+              <label style="margin-right:0.8rem;cursor:pointer">
+                <input type="radio" name="scan-type-filter" value="bullish"> 买入信号
+              </label>
+              <label style="margin-right:0.8rem;cursor:pointer">
+                <input type="radio" name="scan-type-filter" value="bearish"> 卖出信号
+              </label>
+              <label style="margin-right:0.8rem;cursor:pointer">
+                <input type="radio" name="scan-type-filter" value="continuation"> 突破信号
+              </label>
+            </div>
+            <label style="cursor:pointer;color:#8b949e;font-size:0.85rem">
+              <input type="checkbox" id="scan-phase-only"> 仅显示阶段匹配
+            </label>
+            <button class="btn btn-primary" id="scan-btn">一键扫描</button>
+          </div>
+        </div>
+
+        <div id="scan-loading" class="loading">
+          <div class="spinner"></div>
+          <div>正在扫描中，请稍候...</div>
+        </div>
+
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>标的</th><th>信号</th><th>出现日期</th><th>最新价</th><th>市场阶段</th><th>阶段匹配</th></tr>
+              </thead>
+              <tbody id="scan-result-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 信号提醒页 ==================== -->
+      <section class="page" id="alerts">
+        <div class="page-header">
+          <h2>信号提醒</h2>
+          <p class="subtitle">关注列表中出现的最新信号提醒</p>
+        </div>
+
+        <div style="margin-bottom:1rem">
+          <button class="btn btn-primary" id="refresh-alerts-btn">刷新提醒</button>
+        </div>
+
+        <div id="alerts-container"></div>
+      </section>
+
+    </main>
+
+    <!-- 底部导航（移动端） -->
+    <nav class="bottom-nav">
+      <div class="bottom-nav-inner">
+        <button class="bottom-nav-item active" data-page="optimize">
+          <span class="icon">&#9851;</span> 最优信号
+        </button>
+        <button class="bottom-nav-item" data-page="backtest">
+          <span class="icon">&#9881;</span> 回测
+        </button>
+        <button class="bottom-nav-item" data-page="patterns">
+          <span class="icon">&#9776;</span> 信号库
+        </button>
+        <button class="bottom-nav-item" data-page="watchlist">
+          <span class="icon">&#9733;</span> 关注
+        </button>
+        <button class="bottom-nav-item" data-page="scan">
+          <span class="icon">&#128269;</span> 扫描
+        </button>
+      </div>
+    </nav>
+  </div>
+
+  <script src="/js/kline-chart.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
