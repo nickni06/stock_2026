@@ -77,10 +77,48 @@ def get_recent_kline(symbol: str, symbol_type: str = 'stock', days: int = 120) -
     return df
 
 
+def _load_local_cache() -> List[Dict]:
+    """加载本地标的缓存"""
+    try:
+        if os.path.exists(SYMBOLS_CACHE):
+            with open(SYMBOLS_CACHE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except:
+        pass
+    return []
+
+
+def _search_from_cache(keyword: str) -> List[Dict]:
+    """从本地缓存中搜索标的"""
+    cache = _load_local_cache()
+    if not cache:
+        return []
+
+    keyword_lower = keyword.lower()
+    results = []
+    for item in cache:
+        code = item['code']
+        name = item.get('name', code)
+        if (keyword_lower in code.lower() or
+            keyword_lower in name.lower() or
+            is_pinyin_match(name, keyword_lower)):
+            results.append({
+                'code': code,
+                'name': name,
+                'type': 'stock',
+                'last_price': 0,
+                'change_pct': 0
+            })
+            if len(results) >= 20:
+                break
+    return results
+
+
 def search_symbols(keyword: str) -> List[Dict]:
     """
     模糊搜索标的（股票、ETF、板块）
     支持：代码、名称、拼音首字母
+    优先使用网络搜索，网络不可用时回退到本地缓存
     """
     result = []
 
@@ -122,25 +160,30 @@ def search_symbols(keyword: str) -> List[Dict]:
 
         # ETF搜索
         if len(result) < 20:
-            etf_list = ak.fund_etf_sina_info()
-            for _, row in etf_list.iterrows():
-                code = str(row['code'])
-                name = str(row['name'])
-                if (keyword_lower in code.lower() or
-                    keyword_lower in name.lower() or
-                    is_pinyin_match(name, keyword_lower)):
-                    result.append({
-                        'code': code,
-                        'name': name,
-                        'type': 'etf',
-                        'last_price': 0,
-                        'change_pct': 0
-                    })
-                    if len(result) >= 20:
-                        break
+            try:
+                etf_list = ak.fund_etf_sina_info()
+                for _, row in etf_list.iterrows():
+                    code = str(row['code'])
+                    name = str(row['name'])
+                    if (keyword_lower in code.lower() or
+                        keyword_lower in name.lower() or
+                        is_pinyin_match(name, keyword_lower)):
+                        result.append({
+                            'code': code,
+                            'name': name,
+                            'type': 'etf',
+                            'last_price': 0,
+                            'change_pct': 0
+                        })
+                        if len(result) >= 20:
+                            break
+            except:
+                pass
 
     except Exception as e:
-        print(f"Search error: {e}")
+        print(f"Network search failed, falling back to local cache: {e}")
+        # 网络不可用，从本地缓存搜索
+        result = _search_from_cache(keyword)
 
     return result[:20]
 
