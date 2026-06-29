@@ -2,11 +2,15 @@
 数据获取模块
 通过 akshare 获取 A 股、ETF、板块指数的日K线数据
 """
+import os
+# 清除代理环境变量，避免 akshare 通过不可用的代理请求外部 API
+for key in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']:
+    os.environ.pop(key, None)
+
 import akshare as ak
 import pandas as pd
 from typing import Dict, Optional, List
 import json
-import os
 
 
 WATCHLIST_FILE = '/workspace/candlestick-signal/data/watchlist.json'

@@ -25,10 +25,14 @@ def index():
 
 
 # ==================== 标的搜索 ====================
-@app.route('/api/symbols/search')
+@app.route('/api/symbols/search', methods=['GET', 'POST'])
 def api_symbols_search():
-    """模糊搜索标的"""
-    keyword = request.args.get('q', '').strip()
+    """模糊搜索标的（支持 GET query 和 POST JSON body）"""
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        keyword = data.get('q', '').strip()
+    else:
+        keyword = request.args.get('q', '').strip()
     if len(keyword) < 1:
         return jsonify({'results': []})
     results = search_symbols(keyword)

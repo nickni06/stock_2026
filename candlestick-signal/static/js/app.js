@@ -130,7 +130,10 @@ class CandlestickApp {
       }
 
       timer = setTimeout(async () => {
-        const result = await this.apiGet(`/symbols/search?q=${encodeURIComponent(q)}`);
+        // 包含中文时使用 POST 避免 URL 编码问题
+        const result = /[\u4e00-\u9fff]/.test(q)
+          ? await this.apiPost('/symbols/search', { q })
+          : await this.apiGet(`/symbols/search?q=${encodeURIComponent(q)}`);
         if (!result || !result.results || result.results.length === 0) {
           resultsDiv.innerHTML = '<div style="padding:0.7rem;color:#8b949e;text-align:center;font-size:0.8rem">未找到匹配结果</div>';
           resultsDiv.classList.add('show');
