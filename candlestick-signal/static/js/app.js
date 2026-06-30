@@ -138,17 +138,9 @@ class CandlestickApp {
         }
 
         resultsDiv.innerHTML = result.results.map(r => {
-          const sign = r.change_pct > 0 ? '+' : '';
-          const changeCls = r.change_pct > 0 ? 'up' : 'down';
           return `<div class="search-result-item" data-code="${r.code}" data-type="${r.type}" data-name="${r.name}">
-            <div>
-              <span class="sym-name">${r.name}</span>
-              <span class="sym-code"> ${r.code}</span>
-            </div>
-            <div>
-              <span class="sym-price">${r.last_price}</span>
-              <span class="sym-change ${changeCls}"> ${sign}${r.change_pct}%</span>
-            </div>
+            <span class="sym-name">${r.name}</span>
+            <span class="sym-code"> ${r.code}</span>
           </div>`;
         }).join('');
         resultsDiv.classList.add('show');
