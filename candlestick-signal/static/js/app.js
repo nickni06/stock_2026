@@ -130,7 +130,7 @@ class CandlestickApp {
       }
 
       timer = setTimeout(async () => {
-        const result = await this.apiGet(`/symbols/search?q=${encodeURIComponent(q)}`);
+        const result = await this.apiPost('/symbols/search', q);
         if (!result || !result.results || result.results.length === 0) {
           resultsDiv.innerHTML = '<div style="padding:0.7rem;color:#8b949e;text-align:center;font-size:0.8rem">未找到匹配结果</div>';
           resultsDiv.classList.add('show');
@@ -186,11 +186,17 @@ class CandlestickApp {
 
   async apiPost(path, data) {
     try {
-      const res = await fetch(`${this.apiBase}${path}`, {
+      // 字符串作为 form-urlencoded 发送（搜索请求）
+      // 对象作为 JSON 发送（其他 API）
+      const isForm = typeof data === 'string';
+      const opts = {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
+        body: isForm ? new URLSearchParams({ q: data }) : JSON.stringify(data)
+      };
+      if (!isForm) {
+        opts.headers = { 'Content-Type': 'application/json' };
+      }
+      const res = await fetch(`${this.apiBase}${path}`, opts);
       return await res.json();
     } catch (e) {
       console.error(e);
