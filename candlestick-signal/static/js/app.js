@@ -12,7 +12,34 @@ class CandlestickApp {
     this.bindNavigation();
     this.initKlineChart();
     this.bindEvents();
+    this.setDefaultDates();
     this.switchPage('optimize');
+  }
+
+  setDefaultDates() {
+    const today = new Date();
+    const fiveYearsAgo = new Date(today);
+    fiveYearsAgo.setFullYear(today.getFullYear() - 5);
+
+    const fmt = (d) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    const endStr = fmt(today);
+    const startStr = fmt(fiveYearsAgo);
+
+    const optimizeStart = document.getElementById('optimize-start');
+    const optimizeEnd = document.getElementById('optimize-end');
+    const backtestStart = document.getElementById('backtest-start');
+    const backtestEnd = document.getElementById('backtest-end');
+
+    if (optimizeStart && !optimizeStart.value) optimizeStart.value = startStr;
+    if (optimizeEnd && !optimizeEnd.value) optimizeEnd.value = endStr;
+    if (backtestStart && !backtestStart.value) backtestStart.value = startStr;
+    if (backtestEnd && !backtestEnd.value) backtestEnd.value = endStr;
   }
 
   bindNavigation() {
@@ -198,11 +225,13 @@ class CandlestickApp {
   }
 
   showLoading(containerId) {
-    document.getElementById(containerId).querySelector('.loading').classList.add('show');
+    const el = document.getElementById(containerId);
+    if (el) el.classList.add('show');
   }
 
   hideLoading(containerId) {
-    document.getElementById(containerId).querySelector('.loading').classList.remove('show');
+    const el = document.getElementById(containerId);
+    if (el) el.classList.remove('show');
   }
 
   showError(msg) {
