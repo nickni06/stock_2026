@@ -8,6 +8,21 @@ import pandas as pd
 from patterns import get_all_patterns, get_patterns_info, SignalType
 from backtest_engine import backtest_signal, backtest_all_signals, compute_benchmark_curve
 from market_phase import detect_market_phase, get_phase_mask
+
+
+def _convert_np(obj):
+    """递归转换 numpy 类型为原生 Python 类型"""
+    if isinstance(obj, dict):
+        return {k: _convert_np(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_convert_np(v) for v in obj]
+    if hasattr(obj, 'item'):
+        return obj.item()
+    if isinstance(obj, float):
+        return round(obj, 4)
+    return obj
+
+
 from data_fetcher import (
     get_kline, get_recent_kline, search_symbols,
     format_kline_for_frontend, load_watchlist, save_watchlist,
@@ -140,17 +155,18 @@ def api_optimize():
     all_buy, all_sell = split_by_type(all_sorted)
     phase_buy, phase_sell = split_by_type(phase_sorted)
 
+    # 转换 numpy 类型为原生 Python 类型以支持 JSON 序列化
     return jsonify({
         'symbol': symbol,
         'phase': phase_info,
         'top_n': top_n,
         'all_history': {
-            'buy_signals': all_buy[:top_n],
-            'sell_signals': all_sell[:top_n]
+            'buy_signals': _convert_np(all_buy[:top_n]),
+            'sell_signals': _convert_np(all_sell[:top_n])
         },
         'phase_matched': {
-            'buy_signals': phase_buy[:top_n],
-            'sell_signals': phase_sell[:top_n],
+            'buy_signals': _convert_np(phase_buy[:top_n]),
+            'sell_signals': _convert_np(phase_sell[:top_n]),
             'sample_count': int(phase_mask.sum())
         }
     })
@@ -222,7 +238,7 @@ def api_backtest():
 
     return jsonify({
         'symbol': symbol,
-        'statistics': {
+        'statistics': _convert_np({
             'total_trades': result['total_trades'],
             'win_count': result['win_count'],
             'loss_count': result['loss_count'],
@@ -232,12 +248,12 @@ def api_backtest():
             'total_return': result['total_return'],
             'profit_factor': str(result['profit_factor']),
             'max_drawdown': result['max_drawdown']
-        },
-        'equity_curve': result['equity_curve'],
+        }),
+        'equity_curve': _convert_np(result['equity_curve']),
         'benchmark_curve': benchmark_curve,
         'kline': kline_data,
         'signal_positions': signal_positions,
-        'trades': result['trades']
+        'trades': _convert_np(result['trades'])
     })
 
 
@@ -388,4 +404,4 @@ def api_alerts():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)

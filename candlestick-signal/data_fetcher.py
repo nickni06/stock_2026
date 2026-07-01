@@ -3,12 +3,10 @@
 通过 akshare 获取 A 股、ETF、板块指数的日K线数据
 """
 import os
-# 清除代理环境变量，避免 akshare 通过不可用的代理请求外部 API
-for key in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']:
-    os.environ.pop(key, None)
 
 import akshare as ak
 import pandas as pd
+import traceback
 from typing import Dict, Optional, List
 import json
 
@@ -18,6 +16,55 @@ WATCHLIST_FILE = '/workspace/candlestick-signal/data/watchlist.json'
 # 保存一些常用标的的索引，用于快速搜索
 SYMBOLS_CACHE = '/workspace/candlestick-signal/data/symbols_cache.json'
 
+# 新浪 HTTP API 获取K线（环境代理不支持HTTPS连接金融数据源，但HTTP可以）
+SINA_KLINE_URL = 'http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData'
+
+
+def _fetch_kline_sina(symbol: str, is_etf: bool = False) -> Optional[pd.DataFrame]:
+    """通过新浪 HTTP API 获取日K线数据"""
+    try:
+        # 确定交易所前缀
+        if is_etf:
+            prefix = 'sh' if symbol.startswith('51') else 'sz'
+        elif symbol.startswith('6') or symbol.startswith('9'):
+            prefix = 'sh'
+        else:
+            prefix = 'sz'
+
+        import requests
+        params = {
+            'symbol': f'{prefix}{symbol}',
+            'datalen': 1024,
+            'scale': 240,   # 日线
+            'ma': 'no',
+        }
+        resp = requests.get(SINA_KLINE_URL, params=params, timeout=15,
+                            headers={'Referer': 'https://finance.sina.com.cn'})
+        resp.raise_for_status()
+        data = resp.json()
+        if not data or not isinstance(data, list) or 'day' not in data[0]:
+            return None
+
+        rows = []
+        for item in data:
+            rows.append({
+                'date': item['day'],
+                'open': float(item['open']),
+                'high': float(item['high']),
+                'low': float(item['low']),
+                'close': float(item['close']),
+                'volume': int(float(item['volume'])),
+            })
+
+        df = pd.DataFrame(rows)
+        df['date'] = pd.to_datetime(df['date'])
+        df.set_index('date', inplace=True)
+        df = df.sort_index()
+        return df
+    except Exception as e:
+        print(f"Error fetching sina kline for {symbol}: {type(e).__name__}: {e}")
+        return None
+
 
 def get_kline(symbol: str, symbol_type: str = 'stock') -> Optional[pd.DataFrame]:
     """
@@ -26,31 +73,33 @@ def get_kline(symbol: str, symbol_type: str = 'stock') -> Optional[pd.DataFrame]
     symbol_type: stock (个股) | etf | sector (板块指数)
     """
     try:
-        if symbol_type == 'etf':
-            df = ak.fund_etf_hist_sina(symbol=symbol)
+        print(f"[data_fetcher] get_kline: symbol={symbol}, type={symbol_type}", flush=True)
+        if symbol_type == 'stock':
+            # 使用新浪 HTTP API 获取K线（环境代理不支持HTTPS连接金融数据源）
+            df = _fetch_kline_sina(symbol)
+        elif symbol_type == 'etf':
+            df = _fetch_kline_sina(symbol, is_etf=True)
         elif symbol_type == 'sector':
-            # 板块指数使用东财数据
+            # 板块指数使用东财数据（通过代理HTTP）
             df = ak.stock_board_ths_hist_data(index=symbol)
         else:
-            # 默认个股
-            df = ak.stock_zh_a_hist(symbol=symbol, period="daily", start_date=None, end_date=None, adjust="qfq")
+            df = _fetch_kline_sina(symbol)
 
         if df is None or len(df) < 60:
             return None
 
-        # 标准化列名
+        # _fetch_kline_sina 返回的 df 已经标准化（date为index, open/high/low/close/volume为列）
+        # 而 akshare 返回的 df 需要转换
         if '日期' in df.columns:
+            # akshare 中文列名 → 标准化
             df.rename(columns={'日期': 'date', '开盘': 'open', '最高': 'high', '最低': 'low', '收盘': 'close', '成交量': 'volume'}, inplace=True)
-        elif 'day' in df.columns:
-            df.rename(columns={'day': 'date', 'open': 'open', 'high': 'high', 'low': 'low', 'close': 'close', 'volume': 'volume'}, inplace=True)
-
-        df['date'] = pd.to_datetime(df['date'])
-        df.set_index('date', inplace=True)
-        df = df.sort_index()
+            df['date'] = pd.to_datetime(df['date'])
+            df.set_index('date', inplace=True)
 
         # 确保所有需要的列都存在且是数值类型
         for col in ['open', 'high', 'low', 'close', 'volume']:
             if col not in df.columns:
+                print(f"[data_fetcher] missing column: {col}, columns={list(df.columns)}")
                 return None
             df[col] = pd.to_numeric(df[col], errors='coerce')
 
