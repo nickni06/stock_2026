@@ -279,10 +279,16 @@ class CandlestickApp {
 
     if (!result || result.error) {
       this.showError(result?.error || '挖掘失败');
+      console.error('Optimize failed, result:', result);
       return;
     }
 
-    this.renderOptimizeResult(result);
+    try {
+      this.renderOptimizeResult(result);
+    } catch (e) {
+      console.error('renderOptimizeResult error:', e);
+      this.showError('渲染结果失败: ' + e.message);
+    }
   }
 
   renderOptimizeResult(result) {

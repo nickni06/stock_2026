@@ -119,9 +119,13 @@ def api_optimize():
 
     # 全量回测所有信号
     all_results = backtest_all_signals(df, hold_days=5)
+    for r in all_results:
+        r['trades'] = r['trades'][:20]
 
     # 阶段匹配回测
     phase_results = backtest_all_signals(df, hold_days=5, phase_mask=phase_mask)
+    for r in phase_results:
+        r['trades'] = r['trades'][:20]
 
     # 计算综合评分
     for r in all_results:
