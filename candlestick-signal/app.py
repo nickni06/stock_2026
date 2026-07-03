@@ -114,7 +114,7 @@ def api_optimize():
         return jsonify({'error': '数据不足，至少需要60根K线'}), 400
 
     # 限制优化数据量，避免回测耗时过长导致 TRAE 代理超时
-    MAX_OPTIMIZE_BARS = 480
+    MAX_OPTIMIZE_BARS = 180
     if len(df) > MAX_OPTIMIZE_BARS:
         df = df.iloc[-MAX_OPTIMIZE_BARS:]
 
